@@ -36,7 +36,7 @@ start_dockerd() {
 
 run_tool_smoke() {
   git --version
-  rg --version | head -1
+  rg --version
   semgrep --version
   docker version
   docker buildx version
