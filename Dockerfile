@@ -7,7 +7,7 @@ ENV DOCKER_BUILDKIT=1
 ARG GO_VERSION=1.27.1
 
 # Make Go and globally installed binaries available everywhere
-ENV PATH="/usr/local/go/bin:/usr/local/bin:${HOME}/.pdtm/go/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/usr/local/bin:/root/.pdtm/go/bin:${PATH}"
 
 # Base tooling
 RUN apt-get update && apt-get install -y --no-install-recommends \
