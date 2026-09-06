@@ -7,7 +7,7 @@ ENV DOCKER_BUILDKIT=1
 ARG GO_VERSION=1.27.1
 
 # Make Go and globally installed binaries available everywhere
-ENV PATH="/usr/local/go/bin:/usr/local/bin:${PATH}"
+ENV PATH="/usr/local/go/bin:/usr/local/bin:${HOME}/.pdtm/go/bin:${PATH}"
 
 # Base tooling
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -79,12 +79,7 @@ RUN GOBIN=/usr/local/bin \
 #
 # By default pdtm would use:
 #   $HOME/.pdtm/go/bin
-#
-# Using /usr/local/bin instead means nuclei, httpx, subfinder,
-# katana, naabu, dnsx, etc. are directly available in PATH.
-RUN pdtm -install-all \
-    -binary-path /usr/local/bin \
-    -no-color
+run pdtm -install-all -binary-path "$HOME/.pdtm/go/bin" -no-color
 
 # Install semgrep
 RUN python3 -m venv /opt/semgrep \
