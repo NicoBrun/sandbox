@@ -79,7 +79,8 @@ RUN GOBIN=/usr/local/bin \
 #
 # By default pdtm would use:
 #   $HOME/.pdtm/go/bin
-run pdtm -install-all -binary-path "$HOME/.pdtm/go/bin" -no-color
+#run pdtm -install-all -binary-path "$HOME/.pdtm/go/bin" -no-color
+RUN pdtm -install-all -bp /usr/local/bin -no-color
 
 # Install semgrep
 RUN python3 -m venv /opt/semgrep \
