@@ -1,15 +1,17 @@
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV DOCKER_BUILDKIT=1
 
-# Go
+# ---------------------------------------------------------------------------
+# Versions
+# ---------------------------------------------------------------------------
+
 ARG GO_VERSION=1.27.1
 
-# Make Go and globally installed binaries available everywhere
-ENV PATH="/usr/local/go/bin:/usr/local/bin:/root/.pdtm/go/bin:${PATH}"
-
+# ---------------------------------------------------------------------------
 # Base tooling
+# ---------------------------------------------------------------------------
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     build-essential \
@@ -42,7 +44,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zip \
  && rm -rf /var/lib/apt/lists/*
 
-# Install Go
+# ---------------------------------------------------------------------------
+# Sandbox user
+# ---------------------------------------------------------------------------
+
+RUN groupadd \
+      --gid 10001 \
+      sandbox \
+ && useradd \
+      --uid 10001 \
+      --gid 10001 \
+      --create-home \
+      --home-dir /home/sandbox \
+      --shell /bin/bash \
+      sandbox
+
+# ---------------------------------------------------------------------------
+# Go
+# ---------------------------------------------------------------------------
+
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     case "${arch}" in \
@@ -66,32 +86,49 @@ RUN set -eux; \
     rm -rf /usr/local/go; \
     tar -C /usr/local -xzf /tmp/go.tar.gz; \
     rm -f /tmp/go.tar.gz; \
-    go version
+    /usr/local/go/bin/go version
 
-# Install ProjectDiscovery Tool Manager (pdtm)
-#
-# GOBIN=/usr/local/bin makes pdtm itself globally available.
+ENV PATH="/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin"
+
+# ---------------------------------------------------------------------------
+# ProjectDiscovery Tool Manager
+# ---------------------------------------------------------------------------
+
+# pdtm itself is globally available.
 RUN GOBIN=/usr/local/bin \
     go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest \
  && pdtm -version
 
-# Install all ProjectDiscovery tools globally.
+# Install the PD tools as the sandbox user.
 #
-# By default pdtm would use:
-#   $HOME/.pdtm/go/bin
-#run pdtm -install-all -binary-path "$HOME/.pdtm/go/bin" -no-color
-RUN pdtm -install-all -bp /usr/local/bin -no-color
+# They will end up under:
+#
+#   /home/sandbox/.pdtm/go/bin
+#
+USER sandbox
 
-# Install semgrep
+ENV HOME=/home/sandbox
+
+RUN pdtm -install-all -no-color
+
+USER root
+
+# ---------------------------------------------------------------------------
+# Semgrep
+# ---------------------------------------------------------------------------
+
 RUN python3 -m venv /opt/semgrep \
  && /opt/semgrep/bin/python -m pip install --upgrade pip wheel \
  && /opt/semgrep/bin/python -m pip install --no-cache-dir semgrep \
  && ln -sf /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 
-# Install Docker Engine + Buildx
+# ---------------------------------------------------------------------------
+# Docker Engine + Buildx
+# ---------------------------------------------------------------------------
+
 RUN install -m 0755 -d /etc/apt/keyrings \
  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-    -o /etc/apt/keyrings/docker.asc \
+      -o /etc/apt/keyrings/docker.asc \
  && chmod a+r /etc/apt/keyrings/docker.asc
 
 RUN . /etc/os-release \
@@ -104,18 +141,51 @@ Architectures: ${arch}\n\
 Signed-By: /etc/apt/keyrings/docker.asc" \
  > /etc/apt/sources.list.d/docker.sources
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    docker-ce \
-    docker-ce-cli \
-    containerd.io \
-    docker-buildx-plugin \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      docker-ce \
+      docker-ce-cli \
+      containerd.io \
+      docker-buildx-plugin \
  && rm -rf /var/lib/apt/lists/*
 
-# Workspace
-RUN mkdir -p /workspace /scratch
+# ---------------------------------------------------------------------------
+# Runtime directories
+# ---------------------------------------------------------------------------
 
-# Runtime entrypoint
+RUN mkdir -p \
+      /workspace \
+      /scratch \
+      /var/lib/docker \
+      /var/log \
+ && chown -R sandbox:sandbox \
+      /workspace \
+      /scratch \
+      /home/sandbox
+
+# ---------------------------------------------------------------------------
+# Runtime environment
+# ---------------------------------------------------------------------------
+
+ENV HOME=/home/sandbox
+ENV XDG_CONFIG_HOME=/workspace/.config
+ENV XDG_CACHE_HOME=/workspace/.cache
+ENV TMPDIR=/workspace/tmp
+
+ENV PATH="/home/sandbox/.pdtm/go/bin:/workspace/.local/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin"
+
+WORKDIR /workspace
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+
+RUN chmod 0755 /entrypoint.sh
+
+# IMPORTANT:
+# dockerd is intentionally rootful inside the Kata VM.
+USER root
 
 ENTRYPOINT ["/entrypoint.sh"]
