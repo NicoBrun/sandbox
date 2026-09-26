@@ -155,6 +155,9 @@ RUN apt-get update \
 
 RUN mkdir -p \
       /workspace \
+      /workspace/.config \
+      /workspace/.cache \
+      /workspace/tmp \
       /scratch \
       /var/lib/docker \
       /var/log \
